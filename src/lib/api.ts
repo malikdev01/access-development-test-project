@@ -1,42 +1,45 @@
 import type { Product, CreateProductRequest, UpdateProductRequest, FilterOptions } from '@/types/product'
 import type { ApiResponse } from '@/types/api'
 import { mockProducts } from '@/data/mockProducts'
+import { getEffectivePrice } from '@/utils/pricing'
 
 // Simulate API delay
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+const delay = (ms: number): Promise<void> =>
+  new Promise<void>((resolve) => setTimeout(resolve, ms))
 
-// BUG: This function has memory leaks and inefficient data handling
 export async function getProducts(filters?: FilterOptions): Promise<Product[]> {
   await delay(800) // Simulate slow API
-  
-  let products = [...mockProducts]
-  
-  if (filters) {
-    // PERFORMANCE ISSUE: Multiple array iterations instead of single pass
-    if (filters.category) {
-      products = products.filter(p => p.category === filters.category)
-    }
-    
-    // BUG: Price filtering logic is incorrect
-    if (filters.minPrice) {
-      products = products.filter(p => p.price >= filters.minPrice!) // Non-null assertion is dangerous
-    }
-    
-    if (filters.maxPrice) {
-      products = products.filter(p => p.price <= filters.maxPrice!)
-    }
-    
-    // BUG: Stock filtering logic is backwards
-    if (filters.inStock !== undefined) {
-      if (filters.inStock) {
-        products = products.filter(p => p.stock <= 0) // Should be > 0
-      } else {
-        products = products.filter(p => p.stock > 0) // Should be <= 0
-      }
-    }
+
+  const products = [...mockProducts]
+
+  if (!filters) {
+    return products
   }
-  
-  return products
+
+  const { category, minPrice, maxPrice, inStock } = filters
+
+  return products.filter((p) => {
+    if (category && p.category !== category) {
+      return false
+    }
+
+    const effectivePrice = getEffectivePrice(p)
+
+    if (minPrice != null && effectivePrice < minPrice) {
+      return false
+    }
+
+    if (maxPrice != null && effectivePrice > maxPrice) {
+      return false
+    }
+
+    if (inStock !== undefined) {
+      if (inStock && p.stock <= 0) return false
+      if (!inStock && p.stock > 0) return false
+    }
+
+    return true
+  })
 }
 
 export async function getProduct(id: string): Promise<Product | null> {
@@ -46,22 +49,33 @@ export async function getProduct(id: string): Promise<Product | null> {
   return product || null
 }
 
-// BUG: This function doesn't properly validate input data
 export async function createProduct(data: CreateProductRequest): Promise<ApiResponse<Product>> {
   await delay(500)
   
-  // Missing validation for required fields
-  if (!data.name || !data.category) {
-    throw new Error('Invalid product data')
+  // Basic server-side validation to complement client-side checks
+  if (!data.name?.trim()) {
+    throw new Error('Product name is required')
   }
-  
-  // BUG: Price validation is incorrect
-  if (data.price < 0) { // Should also check for reasonable upper bounds
-    throw new Error('Price cannot be negative')
+
+  if (!data.category?.trim()) {
+    throw new Error('Product category is required')
+  }
+
+  if (!Number.isFinite(data.price) || data.price < 0 || data.price > 999_999) {
+    throw new Error('Price must be between 0 and 999,999')
+  }
+
+  if (!Number.isInteger(data.stock) || data.stock < 0) {
+    throw new Error('Stock must be a non‑negative integer')
+  }
+
+  if (!data.sku?.trim()) {
+    throw new Error('SKU is required')
   }
   
   const newProduct: Product = {
-    id: Math.random().toString(36).substr(2, 9), // BUG: Using Math.random for ID generation
+    // Simple deterministic-ish ID for mock data; in real apps use database IDs/UUIDs
+    id: Math.random().toString(36).slice(2, 11),
     ...data,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
