@@ -3,6 +3,7 @@
 import Image from 'next/image'
 import { Button } from '@/components/ui/Button'
 import type { Product } from '@/types/product'
+import { getDiscountedPrice } from '@/utils/pricing'
 
 interface ProductCardProps {
   product: Product
@@ -11,9 +12,12 @@ interface ProductCardProps {
 // BUG: This component has several accessibility and performance issues
 export function ProductCard({ product }: ProductCardProps) {
   const isOutOfStock = product.stock <= 0
-  
-  // BUG: Price formatting is incorrect - doesn't handle edge cases
+
+  // Centralized, safe price formatting
   const formatPrice = (price: number) => {
+    if (!Number.isFinite(price) || price < 0) {
+      return '$0.00'
+    }
     return `$${price.toFixed(2)}`
   }
   
@@ -30,8 +34,8 @@ export function ProductCard({ product }: ProductCardProps) {
     return 'text-success-600'
   }
   
-  // PERFORMANCE ISSUE: This calculation runs on every render
-  const discountedPrice = Math.random() > 0.7 ? product.price * 0.9 : null
+  // Stable, deterministic discount shared with filtering logic
+  const discountedPrice = getDiscountedPrice(product)
   
   return (
     <div className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200 hover:shadow-lg transition-shadow">
@@ -40,7 +44,7 @@ export function ProductCard({ product }: ProductCardProps) {
         {product.imageUrl ? (
           <Image
             src={product.imageUrl}
-            alt={product.name} // BUG: Alt text should be more descriptive
+            alt={`Image of ${product.name}`}
             fill
             className="object-cover"
             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
@@ -64,7 +68,11 @@ export function ProductCard({ product }: ProductCardProps) {
             {product.name}
           </h3>
           {/* BUG: Stock badge is not screen reader friendly */}
-          <span className={`text-xs px-2 py-1 rounded ${getStockColor()}`}>
+          <span
+            className={`text-xs px-2 py-1 rounded ${getStockColor()}`}
+            role="status"
+            aria-label={`Stock status: ${getStockStatus()}`}
+          >
             {getStockStatus()}
           </span>
         </div>
@@ -122,11 +130,12 @@ export function ProductCard({ product }: ProductCardProps) {
           <Button 
             size="sm" 
             variant="outline"
+            type="button"
             onClick={() => {
               // TODO: Implement product details view
               console.log('View details:', product.id)
             }}
-            // BUG: Missing accessibility attributes
+            aria-label={`View details for ${product.name}`}
           >
             Details
           </Button>

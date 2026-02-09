@@ -1,6 +1,6 @@
 'use client'
 
-import { ChangeEvent } from 'react'
+import { ChangeEvent, useCallback } from 'react'
 import type { FilterOptions, ProductCategory } from '@/types/product'
 
 interface ProductFiltersProps {
@@ -21,52 +21,85 @@ const categories: ProductCategory[] = [
 
 // BUG: This component has performance and UX issues
 export function ProductFilters({ filters, onFiltersChange }: ProductFiltersProps) {
-  
-  // BUG: These handlers recreate functions on every render
-  const handleCategoryChange = (e: ChangeEvent<HTMLSelectElement>) => {
-    onFiltersChange({
-      ...filters,
-      category: e.target.value
-    })
-  }
-  
-  const handleMinPriceChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value
-    onFiltersChange({
-      ...filters,
-      minPrice: value ? parseFloat(value) : undefined
-    })
-  }
-  
-  const handleMaxPriceChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value
-    onFiltersChange({
-      ...filters,
-      maxPrice: value ? parseFloat(value) : undefined
-    })
-  }
-  
-  const handleStockChange = (e: ChangeEvent<HTMLSelectElement>) => {
-    const value = e.target.value
-    let inStock: boolean | undefined = undefined
-    if (value === 'true') inStock = true
-    if (value === 'false') inStock = false
-    
-    onFiltersChange({
-      ...filters,
-      inStock
-    })
-  }
-  
-  // BUG: Reset function doesn't properly clear all filters
-  const handleReset = () => {
+  // Use stable handlers to reduce unnecessary re-renders in children
+  const handleCategoryChange = useCallback(
+    (e: ChangeEvent<HTMLSelectElement>) => {
+      onFiltersChange({
+        ...filters,
+        category: e.target.value,
+      })
+    },
+    [filters, onFiltersChange]
+  )
+
+  const handleMinPriceChange = useCallback(
+    (e: ChangeEvent<HTMLInputElement>) => {
+      const value = e.target.value
+      if (!value) {
+        onFiltersChange({
+          ...filters,
+          minPrice: undefined,
+        })
+        return
+      }
+
+      const parsed = parseFloat(value)
+      const clamped = Number.isNaN(parsed) ? undefined : Math.max(0, parsed)
+
+      onFiltersChange({
+        ...filters,
+        minPrice: clamped,
+      })
+    },
+    [filters, onFiltersChange]
+  )
+
+  const handleMaxPriceChange = useCallback(
+    (e: ChangeEvent<HTMLInputElement>) => {
+      const value = e.target.value
+      if (!value) {
+        onFiltersChange({
+          ...filters,
+          maxPrice: undefined,
+        })
+        return
+      }
+
+      const parsed = parseFloat(value)
+      const clamped = Number.isNaN(parsed) ? undefined : Math.max(0, parsed)
+
+      onFiltersChange({
+        ...filters,
+        maxPrice: clamped,
+      })
+    },
+    [filters, onFiltersChange]
+  )
+
+  const handleStockChange = useCallback(
+    (e: ChangeEvent<HTMLSelectElement>) => {
+      const value = e.target.value
+      let inStock: boolean | undefined
+      if (value === 'true') inStock = true
+      if (value === 'false') inStock = false
+
+      onFiltersChange({
+        ...filters,
+        inStock,
+      })
+    },
+    [filters, onFiltersChange]
+  )
+
+  // Reset function should clear all filters, including availability
+  const handleReset = useCallback(() => {
     onFiltersChange({
       category: '',
       minPrice: undefined,
       maxPrice: undefined,
-      inStock: true, // BUG: Should be undefined
+      inStock: undefined,
     })
-  }
+  }, [onFiltersChange])
   
   return (
     <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
@@ -99,8 +132,8 @@ export function ProductFilters({ filters, onFiltersChange }: ProductFiltersProps
             id="min-price"
             placeholder="0.00"
             min="0"
-            step="0.01"
-            value={filters.minPrice || ''}
+            step={1}
+            value={filters.minPrice ?? ''}
             onChange={handleMinPriceChange}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           />
@@ -115,8 +148,8 @@ export function ProductFilters({ filters, onFiltersChange }: ProductFiltersProps
             id="max-price"
             placeholder="999.99"
             min="0"
-            step="0.01"
-            value={filters.maxPrice || ''}
+            step={1}
+            value={filters.maxPrice ?? ''}
             onChange={handleMaxPriceChange}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           />
@@ -144,6 +177,7 @@ export function ProductFilters({ filters, onFiltersChange }: ProductFiltersProps
             onClick={handleReset}
             className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
             type="button"
+            aria-label="Reset all product filters"
           >
             Reset Filters
           </button>

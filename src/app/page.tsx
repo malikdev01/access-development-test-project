@@ -6,6 +6,7 @@ import { ProductFilters } from '@/components/ProductFilters'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import type { Product, FilterOptions } from '@/types/product'
 import { getProducts } from '@/lib/api'
+import { getEffectivePrice } from '@/utils/pricing'
 
 export default function Home() {
   const [products, setProducts] = useState<Product[]>([])
@@ -35,25 +36,23 @@ export default function Home() {
     fetchProducts()
   }, [])
 
-  // BUG: This filtering logic has performance issues and incorrect logic
+  // Client-side filtering based on current filters
   useEffect(() => {
-    let filtered = [...products]
-    
-    // Inefficient: Creates new array on every render
-    filtered = products.filter(product => {
+    const filtered = products.filter((product) => {
+      const effectivePrice = getEffectivePrice(product)
+
       if (filters.category && product.category !== filters.category) {
         return false
       }
       
-      // BUG: Logic error - should be inclusive of min/max prices
-      if (filters.minPrice && product.price < filters.minPrice) {
+      // Inclusive min/max price checks; support zero as a valid boundary
+      if (filters.minPrice != null && effectivePrice < filters.minPrice) {
         return false
       }
-      if (filters.maxPrice && product.price > filters.maxPrice) {
+      if (filters.maxPrice != null && effectivePrice > filters.maxPrice) {
         return false
       }
       
-      // BUG: This condition is backwards
       if (filters.inStock !== undefined) {
         if (filters.inStock && product.stock <= 0) return false
         if (!filters.inStock && product.stock > 0) return false

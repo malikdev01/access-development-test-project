@@ -53,8 +53,9 @@ export default function ProductsPage() {
     try {
       const productData: CreateProductRequest = {
         ...data,
-        price: Number(data.price), // BUG: Should validate number conversion
-        stock: Number(data.stock),
+        // Values already parsed as numbers via valueAsNumber and validated by zod
+        price: data.price,
+        stock: data.stock,
         imageUrl: data.imageUrl || undefined
       }
       
